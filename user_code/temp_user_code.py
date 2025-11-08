@@ -1,11 +1,5 @@
-def average(nums):
-    total = 0
-    for n in nums:
-        total += n
-    return total / len(nums) + 1  # BUG: extra +1 shifts result
+def is_positive(x):
+    return x  <  0
 
 def multiply(a, b):
-    return a * b
-
-def is_even(x):
-    return x % 2 == 0
+    return a / b
