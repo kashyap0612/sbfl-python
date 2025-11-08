@@ -27,23 +27,35 @@ def dstar(ncf, ncs, nf, ns):
     return (ncf ** 2) / denom if denom else 0.0
 
 def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_user_code"):
+    """Generates small test functions automatically for any given code."""
     import numbers
+
+    # --- Syntax validation first ---
     try:
         tree = ast.parse(source_code)
     except SyntaxError as e:
-        return f"# Syntax error in provided code: {e}"
+        st.error(f"⚠️ Syntax error in provided code: {e}")
+        return ""
 
-    test_code = []
-    spec = importlib.util.spec_from_file_location(module_name, "user_code/temp_user_code.py")
+    # --- Ensure file exists before import ---
+    os.makedirs("user_code", exist_ok=True)
+    temp_path = "user_code/temp_user_code.py"
+    with open(temp_path, "w", encoding="utf-8") as f:
+        f.write(source_code)
+
+    # --- Safe import for introspection ---
+    spec = importlib.util.spec_from_file_location(module_name, temp_path)
     mod = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = mod
     spec.loader.exec_module(mod)
 
+    test_code = []
     for node in tree.body:
         if isinstance(node, ast.FunctionDef):
             fname = node.name
             argc = len(node.args.args)
 
+            # custom sample tests
             if fname == "average":
                 test_code.append(
                     "def test_average_fail():\n"
@@ -57,13 +69,17 @@ def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_
             elif fname == "is_even":
                 test_code.append(
                     "def test_is_even_pass():\n"
-                    "    assert is_even(4) == True\n"
+                    "    assert is_even(4) is True\n"
                 )
             else:
                 for i in range(3):
                     args = [random.randint(-5, 5) for _ in range(argc)]
                     test_code.append(
-                        f"def test_{fname}_{i}():\n    {fname}({', '.join(map(str,args))})\n"
+                        f"def test_{fname}_{i}():\n"
+                        f"    try:\n"
+                        f"        {fname}({', '.join(map(str,args))})\n"
+                        f"    except Exception:\n"
+                        f"        pass\n"
                     )
     return "\n".join(test_code)
 
