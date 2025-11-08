@@ -1,0 +1,11 @@
+@"
+__pycache__/
+.venv/
+.coverage
+htmlcov/
+*.pyc
+*.pyo
+*.pyd
+.vscode/
+.idea/
+"@
