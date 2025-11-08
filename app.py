@@ -1,11 +1,12 @@
 import streamlit as st
-
 import sys
 import os
+import ast
+import importlib.util
+import inspect
+import random
 
-# Ensure that "src" is in the Python import path (for Streamlit Cloud)
 sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-
 from sbfl.collector import build_spectra
 from sbfl.localizer import compute_suspiciousness
 from sbfl.metrics import tarantula, ochiai
@@ -26,11 +27,13 @@ def dstar(ncf, ncs, nf, ns):
     return (ncf ** 2) / denom if denom else 0.0
 
 def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_user_code"):
-    import importlib.util, sys
     import numbers
+    try:
+        tree = ast.parse(source_code)
+    except SyntaxError as e:
+        return f"# Syntax error in provided code: {e}"
 
     test_code = []
-    tree = ast.parse(source_code)
     spec = importlib.util.spec_from_file_location(module_name, "user_code/temp_user_code.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = mod
@@ -63,8 +66,6 @@ def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_
                         f"def test_{fname}_{i}():\n    {fname}({', '.join(map(str,args))})\n"
                     )
     return "\n".join(test_code)
-
-
 
 if run_button:
     if not code.strip():
@@ -103,7 +104,6 @@ if run_button:
     total_lines = len(open(source_path).read().splitlines())
     scores = compute_suspiciousness(spectra, total_lines)
 
-    # compute all three metrics + ensemble
     for ln, vals in scores.items():
         ncf, ncs = vals["ncf"], vals["ncs"]
         nf = sum(not s["passed"] for s in spectra)
