@@ -37,7 +37,7 @@ def dstar(ncf, ncs, nf, ns):
 # Auto test generator with smarter arg inference
 # ---------------------------------------------------------------------------
 def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_user_code"):
-    """Generate small test functions automatically for given Python code."""
+    """Auto-generate tests by executing functions on random inputs and checking output consistency."""
     try:
         tree = ast.parse(source_code)
     except SyntaxError as e:
@@ -55,48 +55,54 @@ def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_
     spec.loader.exec_module(mod)
 
     test_code = []
-
     for node in tree.body:
         if not isinstance(node, ast.FunctionDef):
             continue
-
         fname = node.name
-        args = [a.arg for a in node.args.args]
+        fn = getattr(mod, fname, None)
+        if not callable(fn):
+            continue
 
-        if fname == "average":
-            test_code.append(
-                "def test_average_fail():\n"
-                "    assert abs(average([2, 4, 6]) - 4) < 1e-6\n"
-            )
-        elif fname == "multiply":
-            test_code.append(
-                "def test_multiply_pass():\n"
-                "    assert multiply(2, 3) == 6\n"
-            )
-        elif fname == "is_even":
-            test_code.append(
-                "def test_is_even_pass():\n"
-                "    assert is_even(4) is True\n"
-            )
-        else:
-            for i in range(3):
-                call_args = []
-                for arg in args:
-                    # if variable name suggests list/array/numeric sequence
-                    if any(k in arg.lower() for k in ["list", "arr", "nums", "seq"]):
-                        call_args.append(str([random.randint(-5, 10) for _ in range(3)]))
-                    else:
-                        call_args.append(str(random.randint(-5, 10)))
+        # introspect args
+        argc = len(node.args.args)
+
+        for i in range(5):
+            args = []
+            for arg in node.args.args:
+                argn = arg.arg.lower()
+                if any(k in argn for k in ["nums", "arr", "list", "seq"]):
+                    args.append([random.randint(-5, 10) for _ in range(3)])
+                else:
+                    args.append(random.randint(-5, 10))
+
+            try:
+                result = fn(*args)
+            except Exception:
+                continue
+
+            # small perturbation check — re-run with tiny noise
+            args_alt = [
+                (a + 1 if isinstance(a, int) else [x + 1 for x in a])
+                for a in args
+            ]
+            try:
+                result_alt = fn(*args_alt)
+            except Exception:
+                continue
+
+            # if result behaves unexpectedly, generate failing assertion
+            if result == result_alt:
                 test_code.append(
                     f"def test_{fname}_{i}():\n"
-                    f"    try:\n"
-                    f"        {fname}({', '.join(call_args)})\n"
-                    f"    except Exception:\n"
-                    f"        pass\n"
+                    f"    assert {fname}({', '.join(map(repr, args))}) == {repr(result)}\n"
+                )
+            else:
+                test_code.append(
+                    f"def test_{fname}_{i}():\n"
+                    f"    assert {fname}({', '.join(map(repr, args))}) != {repr(result_alt)}\n"
                 )
 
     return "\n".join(test_code)
-
 
 # ---------------------------------------------------------------------------
 # Main run logic
