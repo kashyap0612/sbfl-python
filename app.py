@@ -21,6 +21,25 @@ st.set_page_config(page_title="SBFL Auto-Test Localizer", layout="wide")
 st.title("🤖 Ensemble Spectrum-Based Fault Localization (SBFL)")
 st.write("Runs Tarantula, Ochiai, and DStar together and combines their results.")
 
+# ---------------------------------------------------------------------------
+# Permanent top note about bug types (visible before any run)
+# ---------------------------------------------------------------------------
+st.markdown(
+    """
+    <div style='font-size:20px; color:#2E86C1; margin-top:15px; margin-bottom:25px;'>
+    ⚠️ <b>Note:</b> This tool is currently designed to detect:
+    <ul>
+    <li>Arithmetic logic bugs (e.g., <code>+</code> vs <code>-</code> errors)</li>
+    <li>Comparison or conditional mistakes (e.g., <code>&lt;</code> vs <code>&lt;=</code>)</li>
+    <li>Loop range or boundary issues</li>
+    <li>Incorrect return statements or small value offsets (e.g., <code>return x+1</code> instead of <code>x</code>)</li>
+    <li>Basic boundary handling errors in small algorithms</li>
+    </ul>
+    <b>Limitations:</b> Structural, type, or complex data-flow bugs are not yet detected.
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ---------------------------------------------------------------------------
 # Metric definitions
@@ -28,7 +47,6 @@ st.write("Runs Tarantula, Ochiai, and DStar together and combines their results.
 def dstar(ncf, ncs, nf, ns):
     denom = (ncs + (nf - ncf))
     return (ncf ** 2) / denom if denom else 0.0
-
 
 # ---------------------------------------------------------------------------
 # Auto test generator with failure injection for SBFL contrast
@@ -61,7 +79,6 @@ def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_
             continue
 
         argc = len(node.args.args)
-
         for i in range(5):
             args = []
             for arg in node.args.args:
@@ -90,14 +107,56 @@ def auto_generate_tests_v2(source_code: str, module_name: str = "user_code.temp_
 
     return "\n".join(test_code)
 
+# ---------------------------------------------------------------------------
+# UI — text area and buttons
+# ---------------------------------------------------------------------------
+if "code_text" not in st.session_state:
+    st.session_state["code_text"] = ""
 
-# ---------------------------------------------------------------------------
-# Main run logic
-# ---------------------------------------------------------------------------
-code = st.text_area("Paste your Python code here:", height=300, placeholder="def add(a,b):\n    return a-b")
+# ✅ Always sync user input into session state
+user_input = st.text_area(
+    "Paste your Python code here:",
+    value=st.session_state["code_text"],
+    height=300,
+    placeholder="def add(a,b):\n    return a-b"
+)
+st.session_state["code_text"] = user_input.strip()  # <-- crucial line
+
 run_button = st.button("🔬 Auto Generate Tests & Run Localization")
+demo_button = st.button("💡 Run Demo Example")
 
-if run_button:
+
+# Demo button fills the code and triggers rerun
+if demo_button:
+    st.session_state["code_text"] = """\
+def find_largest(nums):
+    if not nums:
+        return None
+    largest = nums[0]
+    for n in nums:        # BUG: should be for n in nums[1:]
+        if n > largest:
+            largest = n
+    return largest + 1    # BUG: extra +1 shifts result
+
+def is_positive(x):
+    return x > 0
+
+def multiply(a, b):
+    return a * b
+"""
+    st.session_state["demo_mode"] = True
+    try:
+        st.rerun()
+    except AttributeError:
+        st.experimental_rerun()
+
+# ---------------------------------------------------------------------------
+# Main analysis section
+# ---------------------------------------------------------------------------
+if run_button or st.session_state.get("demo_mode", False):
+    code = st.session_state["code_text"]
+    st.session_state["demo_mode"] = False
+
     if not code.strip():
         st.error("Please paste Python code first.")
         st.stop()
@@ -113,10 +172,11 @@ if run_button:
     with open(test_path, "w", encoding="utf-8") as f:
         f.write(auto_tests)
 
-    st.info("✅ Auto-generated test cases:")
-    st.code(auto_tests, language="python")
+    # ✅ Collapsible section for generated tests
+    with st.expander("✅ Auto-generated Test Cases (click to view)"):
+        st.code(auto_tests, language="python")
 
-    # Load and run dynamically
+    # Load user module + tests
     spec_code = importlib.util.spec_from_file_location("user_code.temp_user_code", source_path)
     user_module = importlib.util.module_from_spec(spec_code)
     sys.modules["user_code.temp_user_code"] = user_module
@@ -141,7 +201,7 @@ if run_button:
     total_lines = len(open(source_path).read().splitlines())
     scores = compute_suspiciousness(spectra, total_lines)
 
-    # Compute combined metric values
+    # Combine metrics
     for ln, vals in scores.items():
         ncf, ncs = vals["ncf"], vals["ncs"]
         nf = sum(not s["passed"] for s in spectra)
