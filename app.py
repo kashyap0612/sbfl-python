@@ -1,4 +1,9 @@
-import sys, os, importlib.util, inspect, streamlit as st, ast, random
+import sys
+import os
+
+# Ensure that "src" is in the Python import path (for Streamlit Cloud)
+sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
+
 from sbfl.collector import build_spectra
 from sbfl.localizer import compute_suspiciousness
 from sbfl.metrics import tarantula, ochiai
