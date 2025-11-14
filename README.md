@@ -2,7 +2,7 @@
 
 A web-based system to automatically detect suspicious lines in Python programs using statistical fault localization metrics — **Tarantula**, **Ochiai**, and **DStar**.
 
-🚀 **Live Demo:** [https://sbfl-python-kashyap0612.streamlit.app](https://sbfl-python-kashyap0612.streamlit.app)
+🚀 **Live Demo:** [https://sbfl-python-kashyap0612.streamlit.app](https://sbfl-python.streamlit.app)
 
 ---
 
